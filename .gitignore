@@ -1,0 +1,10 @@
+.env
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.venv/
+.uv-python/
+.uv-cache/
+.npm-cache/
+node_modules/
+.next/

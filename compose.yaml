@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-convoweave}
+      POSTGRES_USER: ${POSTGRES_USER:-convoweave}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-convoweave}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "pg_isready -U ${POSTGRES_USER:-convoweave} -d ${POSTGRES_DB:-convoweave}"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: ./apps/api
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg://convoweave:convoweave@postgres:5432/convoweave}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000').then(r => { if (!r.ok) process.exit(1) })"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_MODEL_ID: ${ELEVENLABS_MODEL_ID:-scribe_v2}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg://convoweave:convoweave@postgres:5432/convoweave}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/data/media}
+    volumes:
+      - media_data:/data/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres_data:
+  media_data:
