@@ -13,6 +13,7 @@ from app.database import get_session
 from app.schemas import (
     ConversationSummary,
     HealthResponse,
+    RealtimeTokenResponse,
     SpeakerUpdate,
     TranscriptionResponse,
 )
@@ -45,6 +46,32 @@ app.add_middleware(
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.post("/api/v1/realtime/token", response_model=RealtimeTokenResponse)
+async def create_realtime_token(
+    settings: Settings = Depends(get_settings),
+) -> RealtimeTokenResponse:
+    if not settings.elevenlabs_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ElevenLabs is not configured.",
+        )
+
+    client = ElevenLabsTranscriber(
+        api_key=settings.elevenlabs_api_key,
+        model_id=settings.elevenlabs_model_id,
+        base_url=settings.elevenlabs_base_url,
+        timeout_seconds=settings.request_timeout_seconds,
+    )
+    try:
+        token = await to_thread.run_sync(client.create_realtime_token)
+    except ElevenLabsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    return RealtimeTokenResponse(token=token)
 
 
 @app.post(

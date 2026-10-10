@@ -50,3 +50,7 @@ class ConversationSummary(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class RealtimeTokenResponse(BaseModel):
+    token: str

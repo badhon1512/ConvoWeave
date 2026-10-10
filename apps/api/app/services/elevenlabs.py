@@ -20,6 +20,27 @@ class ElevenLabsTranscriber:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
+    def create_realtime_token(self) -> str:
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.post(
+                    f"{self.base_url}/v1/single-use-token/realtime_scribe",
+                    headers={"xi-api-key": self.api_key},
+                )
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            raise ElevenLabsError(
+                f"ElevenLabs token request failed with status {status}."
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ElevenLabsError("Could not reach ElevenLabs.") from exc
+
+        token = response.json().get("token")
+        if not token:
+            raise ElevenLabsError("ElevenLabs returned an invalid token response.")
+        return token
+
     def transcribe(
         self,
         audio: BinaryIO,
@@ -56,4 +77,3 @@ class ElevenLabsTranscriber:
             raise ElevenLabsError("Could not reach ElevenLabs.") from exc
 
         return response.json()
-

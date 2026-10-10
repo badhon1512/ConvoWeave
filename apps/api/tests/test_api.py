@@ -36,3 +36,14 @@ def test_transcription_requires_configuration() -> None:
 
     assert response.status_code == 503
     assert response.json() == {"detail": "ElevenLabs is not configured."}
+
+
+def test_realtime_token_requires_configuration() -> None:
+    app.dependency_overrides[get_settings] = _settings_without_elevenlabs
+    try:
+        response = client.post("/api/v1/realtime/token")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ElevenLabs is not configured."}
