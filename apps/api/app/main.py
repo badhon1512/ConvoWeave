@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 from anyio import to_thread
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
@@ -13,6 +14,7 @@ from app.database import get_session
 from app.schemas import (
     ConversationSummary,
     HealthResponse,
+    IntelligenceResponse,
     RealtimeTokenResponse,
     SpeakerUpdate,
     TranscriptionResponse,
@@ -20,15 +22,24 @@ from app.schemas import (
 from app.services.media import MediaStore
 from app.services.persistence import (
     create_conversation,
+    get_latest_conversation_transcription,
+    get_latest_intelligence,
     get_media_asset,
     get_transcription,
     list_conversations,
     rename_speaker,
+    save_intelligence,
     save_media_asset,
     save_transcription,
     set_conversation_status,
 )
 from app.services.elevenlabs import ElevenLabsError, ElevenLabsTranscriber
+from app.services.intelligence import (
+    PROMPT_VERSION,
+    IntelligenceError,
+    OpenAISummaryGenerator,
+    SummaryWorkflow,
+)
 from app.services.transcript import build_transcript
 
 
@@ -72,6 +83,72 @@ async def create_realtime_token(
             detail=str(exc),
         ) from exc
     return RealtimeTokenResponse(token=token)
+
+
+@app.post(
+    "/api/v1/conversations/{conversation_id}/intelligence",
+    response_model=IntelligenceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_intelligence(
+    conversation_id: UUID,
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> IntelligenceResponse:
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OpenAI is not configured.",
+        )
+
+    transcription = await get_latest_conversation_transcription(
+        session, conversation_id
+    )
+    if transcription is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation transcript not found.",
+        )
+
+    workflow = SummaryWorkflow(
+        OpenAISummaryGenerator(
+            api_key=settings.openai_api_key,
+            model_id=settings.openai_model_id,
+            timeout_seconds=settings.request_timeout_seconds,
+        )
+    )
+    try:
+        draft = await to_thread.run_sync(lambda: workflow.run(transcription.turns))
+    except IntelligenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    return await save_intelligence(
+        session=session,
+        conversation_id=conversation_id,
+        draft=draft,
+        model_id=settings.openai_model_id,
+        prompt_version=PROMPT_VERSION,
+    )
+
+
+@app.get(
+    "/api/v1/conversations/{conversation_id}/intelligence",
+    response_model=IntelligenceResponse,
+)
+async def read_intelligence(
+    conversation_id: UUID,
+    session: AsyncSession = Depends(get_session),
+) -> IntelligenceResponse:
+    intelligence = await get_latest_intelligence(session, conversation_id)
+    if intelligence is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation intelligence not found.",
+        )
+    return intelligence
 
 
 @app.post(

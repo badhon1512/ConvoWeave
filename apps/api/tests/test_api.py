@@ -47,3 +47,17 @@ def test_realtime_token_requires_configuration() -> None:
 
     assert response.status_code == 503
     assert response.json() == {"detail": "ElevenLabs is not configured."}
+
+
+def test_intelligence_requires_configuration() -> None:
+    app.dependency_overrides[get_settings] = _settings_without_elevenlabs
+    app.dependency_overrides[get_session] = _unused_session
+    try:
+        response = client.post(
+            "/api/v1/conversations/00000000-0000-0000-0000-000000000001/intelligence"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "OpenAI is not configured."}

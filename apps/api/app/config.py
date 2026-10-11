@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_model_id: str = "scribe_v2"
     elevenlabs_base_url: str = "https://api.elevenlabs.io"
+    openai_api_key: str = ""
+    openai_model_id: str = "gpt-6-astra"
     max_upload_mb: int = Field(default=100, ge=1, le=2000)
     request_timeout_seconds: float = Field(default=600, gt=0)
     frontend_origin: str = "http://localhost:3000"

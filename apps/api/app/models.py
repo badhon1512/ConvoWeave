@@ -37,6 +37,11 @@ class Conversation(Base):
     media_assets: Mapped[list["MediaAsset"]] = relationship(
         back_populates="conversation", cascade="all, delete-orphan"
     )
+    intelligence_artifacts: Mapped[list["IntelligenceArtifact"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="IntelligenceArtifact.version",
+    )
 
 
 class MediaAsset(Base):
@@ -126,3 +131,30 @@ class Turn(Base):
 
     transcript: Mapped[Transcript] = relationship(back_populates="turns")
     speaker: Mapped[Speaker] = relationship()
+
+
+class IntelligenceArtifact(Base):
+    __tablename__ = "intelligence_artifacts"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "kind", "version", name="uq_intelligence_version"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(50), default="summary")
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(40), default="citation_validated")
+    content: Mapped[dict] = mapped_column(JSON)
+    model_id: Mapped[str] = mapped_column(String(100))
+    prompt_version: Mapped[str] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    conversation: Mapped[Conversation] = relationship(
+        back_populates="intelligence_artifacts"
+    )

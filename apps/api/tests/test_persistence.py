@@ -6,12 +6,15 @@ from app.models import Base
 from app.services.media import StoredMedia
 from app.services.persistence import (
     create_conversation,
+    get_latest_intelligence,
     get_transcription,
     list_conversations,
     rename_speaker,
     save_media_asset,
+    save_intelligence,
     save_transcription,
 )
+from app.schemas import ActionItem, EvidenceClaim, IntelligenceDraft
 from app.services.transcript import build_transcript
 
 
@@ -91,5 +94,33 @@ async def _persistence_scenario() -> None:
         assert len(conversations) == 1
         assert conversations[0].transcript_id == stored.id
         assert conversations[0].media_id == media.id
+
+        claim = EvidenceClaim(text="A greeting was exchanged.", turn_sequences=[1])
+        intelligence = await save_intelligence(
+            session,
+            conversation.id,
+            IntelligenceDraft(
+                overview=claim,
+                key_points=[claim],
+                decisions=[],
+                action_items=[
+                    ActionItem(
+                        text="Continue the conversation.",
+                        owner=None,
+                        due_date=None,
+                        turn_sequences=[1],
+                    )
+                ],
+                risks=[],
+                open_questions=[],
+            ),
+            model_id="test-model",
+            prompt_version="summary_v1",
+        )
+        loaded_intelligence = await get_latest_intelligence(session, conversation.id)
+
+        assert intelligence.version == 1
+        assert loaded_intelligence is not None
+        assert loaded_intelligence.overview.turn_sequences == [1]
 
     await engine.dispose()

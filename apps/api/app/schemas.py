@@ -54,3 +54,34 @@ class HealthResponse(BaseModel):
 
 class RealtimeTokenResponse(BaseModel):
     token: str
+
+
+class EvidenceClaim(BaseModel):
+    text: str = Field(min_length=1)
+    turn_sequences: list[int] = Field(min_length=1)
+
+
+class ActionItem(BaseModel):
+    text: str = Field(min_length=1)
+    owner: str | None
+    due_date: str | None
+    turn_sequences: list[int] = Field(min_length=1)
+
+
+class IntelligenceDraft(BaseModel):
+    overview: EvidenceClaim
+    key_points: list[EvidenceClaim]
+    decisions: list[EvidenceClaim]
+    action_items: list[ActionItem]
+    risks: list[EvidenceClaim]
+    open_questions: list[EvidenceClaim]
+
+
+class IntelligenceResponse(IntelligenceDraft):
+    id: UUID
+    conversation_id: UUID
+    version: int
+    status: str
+    model_id: str
+    prompt_version: str
+    created_at: str

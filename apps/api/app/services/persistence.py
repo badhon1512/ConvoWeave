@@ -1,13 +1,22 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Conversation, MediaAsset, Speaker, Transcript, Turn
+from app.models import (
+    Conversation,
+    IntelligenceArtifact,
+    MediaAsset,
+    Speaker,
+    Transcript,
+    Turn,
+)
 from app.schemas import (
     ConversationSummary,
     ConversationTurn,
+    IntelligenceDraft,
+    IntelligenceResponse,
     TranscriptionResponse,
     TranscriptWord,
 )
@@ -171,6 +180,90 @@ async def get_transcription(
         speakers=[speaker.provider_speaker_id for speaker in transcript.speakers],
         speaker_names=names,
         turns=turns,
+    )
+
+
+async def get_latest_conversation_transcription(
+    session: AsyncSession,
+    conversation_id: UUID,
+) -> TranscriptionResponse | None:
+    result = await session.execute(
+        select(Transcript.id)
+        .where(Transcript.conversation_id == conversation_id)
+        .order_by(Transcript.version.desc())
+        .limit(1)
+    )
+    transcript_id = result.scalar_one_or_none()
+    if transcript_id is None:
+        return None
+    return await get_transcription(session, str(transcript_id))
+
+
+async def save_intelligence(
+    session: AsyncSession,
+    conversation_id: UUID,
+    draft: IntelligenceDraft,
+    model_id: str,
+    prompt_version: str,
+) -> IntelligenceResponse:
+    conversation = await session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise ValueError("Conversation not found.")
+
+    result = await session.execute(
+        select(func.coalesce(func.max(IntelligenceArtifact.version), 0)).where(
+            IntelligenceArtifact.conversation_id == conversation_id,
+            IntelligenceArtifact.kind == "summary",
+        )
+    )
+    artifact = IntelligenceArtifact(
+        conversation=conversation,
+        kind="summary",
+        version=result.scalar_one() + 1,
+        status="citation_validated",
+        content=draft.model_dump(),
+        model_id=model_id,
+        prompt_version=prompt_version,
+    )
+    session.add(artifact)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    await session.refresh(artifact)
+    return _intelligence_response(artifact)
+
+
+async def get_latest_intelligence(
+    session: AsyncSession,
+    conversation_id: UUID,
+) -> IntelligenceResponse | None:
+    result = await session.execute(
+        select(IntelligenceArtifact)
+        .where(
+            IntelligenceArtifact.conversation_id == conversation_id,
+            IntelligenceArtifact.kind == "summary",
+        )
+        .order_by(IntelligenceArtifact.version.desc())
+        .limit(1)
+    )
+    artifact = result.scalar_one_or_none()
+    return _intelligence_response(artifact) if artifact else None
+
+
+def _intelligence_response(artifact: IntelligenceArtifact) -> IntelligenceResponse:
+    return IntelligenceResponse.model_validate(
+        {
+            **artifact.content,
+            "id": artifact.id,
+            "conversation_id": artifact.conversation_id,
+            "version": artifact.version,
+            "status": artifact.status,
+            "model_id": artifact.model_id,
+            "prompt_version": artifact.prompt_version,
+            "created_at": artifact.created_at.isoformat(),
+        }
     )
 
 
