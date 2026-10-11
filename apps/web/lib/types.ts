@@ -38,3 +38,29 @@ export type ConversationSummary = {
   audio_filename: string | null;
   transcript_id: string | null;
 };
+
+export type EvidenceClaim = {
+  text: string;
+  turn_sequences: number[];
+};
+
+export type ActionItem = EvidenceClaim & {
+  owner: string | null;
+  due_date: string | null;
+};
+
+export type ConversationIntelligence = {
+  id: string;
+  conversation_id: string;
+  version: number;
+  status: string;
+  model_id: string;
+  prompt_version: string;
+  created_at: string;
+  overview: EvidenceClaim;
+  key_points: EvidenceClaim[];
+  decisions: EvidenceClaim[];
+  action_items: ActionItem[];
+  risks: EvidenceClaim[];
+  open_questions: EvidenceClaim[];
+};
