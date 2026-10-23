@@ -1,7 +1,14 @@
 import { TranscriptionWorkspace } from "@/components/transcription-workspace";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export default function Home() {
+  const apiUrl =
+    process.env.API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:8000";
+
   return (
     <main className="page-shell">
       <nav className="top-nav">
@@ -19,7 +26,7 @@ export default function Home() {
           by speaker and timestamp.
         </p>
       </header>
-      <TranscriptionWorkspace />
+      <TranscriptionWorkspace apiUrl={apiUrl} />
     </main>
   );
 }

@@ -6,9 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence";
 import type { Transcription } from "@/lib/types";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-export function LiveConversation() {
+export function LiveConversation({ apiUrl }: { apiUrl: string }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -268,7 +266,10 @@ export function LiveConversation() {
       </section>
       {transcription?.conversation_id && (
         <div className="live-intelligence">
-          <ConversationIntelligencePanel conversationId={transcription.conversation_id} />
+          <ConversationIntelligencePanel
+            apiUrl={apiUrl}
+            conversationId={transcription.conversation_id}
+          />
         </div>
       )}
     </section>

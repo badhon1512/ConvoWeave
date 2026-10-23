@@ -5,9 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence";
 import type { ConversationSummary, Transcription } from "@/lib/types";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-export function TranscriptionWorkspace() {
+export function TranscriptionWorkspace({ apiUrl }: { apiUrl: string }) {
   const [audio, setAudio] = useState<File | null>(null);
   const [language, setLanguage] = useState("");
   const [speakerCount, setSpeakerCount] = useState("");
@@ -185,6 +183,7 @@ export function TranscriptionWorkspace() {
               <div className="speaker-editors">
                 {transcription.speakers.map((speakerId) => (
                   <SpeakerEditor
+                    apiUrl={apiUrl}
                     key={speakerId}
                     transcriptionId={transcription.id!}
                     speakerId={speakerId}
@@ -217,7 +216,10 @@ export function TranscriptionWorkspace() {
       </section>
       </section>
       {transcription?.conversation_id && (
-        <ConversationIntelligencePanel conversationId={transcription.conversation_id} />
+        <ConversationIntelligencePanel
+          apiUrl={apiUrl}
+          conversationId={transcription.conversation_id}
+        />
       )}
       <section className="history-panel">
         <div className="panel-heading">
@@ -260,6 +262,7 @@ export function TranscriptionWorkspace() {
 }
 
 type SpeakerEditorProps = {
+  apiUrl: string;
   transcriptionId: string;
   speakerId: string;
   initialName: string;
@@ -267,6 +270,7 @@ type SpeakerEditorProps = {
 };
 
 function SpeakerEditor({
+  apiUrl,
   transcriptionId,
   speakerId,
   initialName,

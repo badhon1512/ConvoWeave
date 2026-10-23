@@ -354,6 +354,62 @@ docker compose down
 
 Add `-v` only when you intentionally want to delete the PostgreSQL and media volumes.
 
+## Deploying to Railway
+
+Deploy the repository as three Railway services: `web`, `api`, and PostgreSQL.
+The application containers read Railway's runtime configuration and do not require
+secrets in the repository.
+
+### API service
+
+1. Create a service from this GitHub repository.
+2. Set its root directory to `/apps/api`; Railway will detect the Dockerfile.
+3. Add a PostgreSQL service and reference its `DATABASE_URL` from the API service.
+   Both Railway's standard PostgreSQL URL and the explicit
+   `postgresql+psycopg://` form are accepted.
+4. Add these variables:
+
+```env
+ELEVENLABS_API_KEY=your_key
+ELEVENLABS_MODEL_ID=scribe_v2
+OPENAI_API_KEY=your_key
+OPENAI_MODEL_ID=gpt-6-astra
+FRONTEND_ORIGIN=https://your-web-domain.up.railway.app
+MEDIA_ROOT=/data/media
+RAILWAY_RUN_UID=0
+```
+
+5. Set the pre-deploy command to `alembic upgrade head`.
+6. Set the healthcheck path to `/health` and generate a public domain.
+7. Attach a Railway volume at `/data/media`. The volume preserves uploaded audio;
+   `RAILWAY_RUN_UID=0` allows the container to write to Railway's root-mounted volume.
+
+The API Docker image listens on Railway's injected `PORT` and falls back to `8000`
+for local Docker usage.
+
+### Web service
+
+1. Create another service from the same repository.
+2. Set its root directory to `/apps/web`; Railway will detect the Dockerfile.
+3. Set `API_URL` to the API's public HTTPS domain, without a trailing slash.
+4. Set the healthcheck path to `/` and generate a public domain.
+5. Copy the resulting web domain into the API service's `FRONTEND_ORIGIN` variable
+   and redeploy the API.
+
+`API_URL` is read by Next.js at runtime, so the same web image can be promoted
+between Railway environments without rebuilding it for a different API domain.
+
+### Deployment verification
+
+After both services deploy:
+
+- Open the web domain and upload a short audio file.
+- Confirm `/health` returns `{"status":"ok"}` on the API domain.
+- Confirm the conversation, audio, transcript, and one-time insights remain after
+  an API redeploy.
+- Start a live conversation from an HTTPS page and verify microphone permission,
+  realtime transcription, saving, insights, and grounded Q&A.
+
 ## Using ConvoWeave
 
 ### Run a live session

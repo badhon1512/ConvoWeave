@@ -2,7 +2,14 @@ import Link from "next/link";
 
 import { LiveConversation } from "@/components/live-conversation";
 
+export const dynamic = "force-dynamic";
+
 export default function LivePage() {
+  const apiUrl =
+    process.env.API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:8000";
+
   return (
     <main className="page-shell">
       <nav className="top-nav">
@@ -20,7 +27,7 @@ export default function LivePage() {
           speaker-separated transcript.
         </p>
       </header>
-      <LiveConversation />
+      <LiveConversation apiUrl={apiUrl} />
     </main>
   );
 }

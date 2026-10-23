@@ -9,10 +9,17 @@ import type {
   GroundedAnswer,
 } from "@/lib/types";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const fallbackError = "Could not generate conversation intelligence.";
 
-export function ConversationIntelligencePanel({ conversationId }: { conversationId: string }) {
+type ConversationIntelligencePanelProps = {
+  apiUrl: string;
+  conversationId: string;
+};
+
+export function ConversationIntelligencePanel({
+  apiUrl,
+  conversationId,
+}: ConversationIntelligencePanelProps) {
   const [intelligence, setIntelligence] = useState<ConversationIntelligence | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -28,7 +35,7 @@ export function ConversationIntelligencePanel({ conversationId }: { conversation
     setError("");
     setIsLoading(true);
 
-    loadOrCreateIntelligence(conversationId)
+    loadOrCreateIntelligence(apiUrl, conversationId)
       .then((result) => {
         if (isCurrent) setIntelligence(result);
       })
@@ -42,7 +49,7 @@ export function ConversationIntelligencePanel({ conversationId }: { conversation
     return () => {
       isCurrent = false;
     };
-  }, [conversationId, attempt]);
+  }, [apiUrl, conversationId, attempt]);
 
   useEffect(() => {
     setQuestion("");
@@ -155,18 +162,20 @@ export function ConversationIntelligencePanel({ conversationId }: { conversation
 
 const pendingRequests = new Map<string, Promise<ConversationIntelligence>>();
 
-function loadOrCreateIntelligence(conversationId: string) {
-  const pending = pendingRequests.get(conversationId);
+function loadOrCreateIntelligence(apiUrl: string, conversationId: string) {
+  const requestKey = `${apiUrl}:${conversationId}`;
+  const pending = pendingRequests.get(requestKey);
   if (pending) return pending;
 
-  const request = fetchOrCreateIntelligence(conversationId).finally(() => {
-    pendingRequests.delete(conversationId);
+  const request = fetchOrCreateIntelligence(apiUrl, conversationId).finally(() => {
+    pendingRequests.delete(requestKey);
   });
-  pendingRequests.set(conversationId, request);
+  pendingRequests.set(requestKey, request);
   return request;
 }
 
 async function fetchOrCreateIntelligence(
+  apiUrl: string,
   conversationId: string,
 ): Promise<ConversationIntelligence> {
   const endpoint = `${apiUrl}/api/v1/conversations/${conversationId}/intelligence`;
