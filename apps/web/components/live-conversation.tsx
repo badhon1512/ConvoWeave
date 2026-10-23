@@ -3,6 +3,7 @@
 import { useScribe } from "@elevenlabs/react";
 import { useEffect, useRef, useState } from "react";
 
+import { ConversationIntelligencePanel } from "@/components/conversation-intelligence";
 import type { Transcription } from "@/lib/types";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -250,11 +251,11 @@ export function LiveConversation() {
             </div>
             <ol className="turn-list">
               {transcription.turns.map((turn) => (
-                <li className="turn" key={turn.sequence}>
+                <li className="turn" key={turn.sequence} id={`turn-${turn.sequence}`}>
                   <div className="speaker-avatar">{speakerInitial(turn.speaker_id)}</div>
                   <div className="turn-content">
                     <div className="turn-heading">
-                      <strong>{formatSpeaker(turn.speaker_id)}</strong>
+                      <strong>{turn.speaker_name ?? formatSpeaker(turn.speaker_id)}</strong>
                       <time>{formatTime(turn.start)}</time>
                     </div>
                     <p>{turn.text}</p>
@@ -265,6 +266,11 @@ export function LiveConversation() {
           </div>
         )}
       </section>
+      {transcription?.conversation_id && (
+        <div className="live-intelligence">
+          <ConversationIntelligencePanel conversationId={transcription.conversation_id} />
+        </div>
+      )}
     </section>
   );
 }

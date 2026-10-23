@@ -64,3 +64,9 @@ export type ConversationIntelligence = {
   risks: EvidenceClaim[];
   open_questions: EvidenceClaim[];
 };
+
+export type GroundedAnswer = {
+  answer: string;
+  supported: boolean;
+  turn_sequences: number[];
+};

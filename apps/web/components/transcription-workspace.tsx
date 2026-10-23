@@ -2,13 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import type {
-  ActionItem,
-  ConversationIntelligence,
-  ConversationSummary,
-  EvidenceClaim,
-  Transcription,
-} from "@/lib/types";
+import { ConversationIntelligencePanel } from "@/components/conversation-intelligence";
+import type { ConversationSummary, Transcription } from "@/lib/types";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -20,9 +15,6 @@ export function TranscriptionWorkspace() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [intelligence, setIntelligence] = useState<ConversationIntelligence | null>(null);
-  const [intelligenceError, setIntelligenceError] = useState("");
-  const [isGeneratingIntelligence, setIsGeneratingIntelligence] = useState(false);
 
   async function loadConversations() {
     const response = await fetch(`${apiUrl}/api/v1/conversations`);
@@ -44,7 +36,6 @@ export function TranscriptionWorkspace() {
 
     setError("");
     setTranscription(null);
-    setIntelligence(null);
     setIsSubmitting(true);
 
     const query = new URLSearchParams();
@@ -83,43 +74,6 @@ export function TranscriptionWorkspace() {
     }
     const opened = (await response.json()) as Transcription;
     setTranscription(opened);
-    if (opened.conversation_id) void loadIntelligence(opened.conversation_id);
-  }
-
-  async function loadIntelligence(conversationId: string) {
-    setIntelligence(null);
-    setIntelligenceError("");
-    const response = await fetch(
-      `${apiUrl}/api/v1/conversations/${conversationId}/intelligence`,
-    );
-    if (response.ok) {
-      setIntelligence((await response.json()) as ConversationIntelligence);
-    }
-  }
-
-  async function generateIntelligence() {
-    if (!transcription?.conversation_id) return;
-    setIntelligenceError("");
-    setIsGeneratingIntelligence(true);
-    try {
-      const response = await fetch(
-        `${apiUrl}/api/v1/conversations/${transcription.conversation_id}/intelligence`,
-        { method: "POST" },
-      );
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.detail ?? "Could not generate conversation intelligence.");
-      }
-      setIntelligence(payload as ConversationIntelligence);
-    } catch (reason) {
-      setIntelligenceError(
-        reason instanceof Error
-          ? reason.message
-          : "Could not generate conversation intelligence.",
-      );
-    } finally {
-      setIsGeneratingIntelligence(false);
-    }
   }
 
   return (
@@ -263,12 +217,7 @@ export function TranscriptionWorkspace() {
       </section>
       </section>
       {transcription?.conversation_id && (
-        <IntelligencePanel
-          intelligence={intelligence}
-          error={intelligenceError}
-          isGenerating={isGeneratingIntelligence}
-          onGenerate={() => void generateIntelligence()}
-        />
+        <ConversationIntelligencePanel conversationId={transcription.conversation_id} />
       )}
       <section className="history-panel">
         <div className="panel-heading">
@@ -310,140 +259,6 @@ export function TranscriptionWorkspace() {
   );
 }
 
-type IntelligencePanelProps = {
-  intelligence: ConversationIntelligence | null;
-  error: string;
-  isGenerating: boolean;
-  onGenerate: () => void;
-};
-
-function IntelligencePanel({
-  intelligence,
-  error,
-  isGenerating,
-  onGenerate,
-}: IntelligencePanelProps) {
-  return (
-    <section className="intelligence-panel" aria-live="polite">
-      <div className="panel-heading">
-        <div>
-          <span className="step">Step 3</span>
-          <h2>Conversation intelligence</h2>
-        </div>
-        {intelligence && (
-          <span className="status-dot">Citations checked v{intelligence.version}</span>
-        )}
-      </div>
-
-      {!intelligence && !isGenerating && (
-        <div className="intelligence-start">
-          <div>
-            <strong>Turn the transcript into useful knowledge</strong>
-            <p>
-              Generate an evidence-cited summary with decisions, actions, risks,
-              and open questions.
-            </p>
-          </div>
-          <button type="button" onClick={onGenerate}>Generate AI insights</button>
-        </div>
-      )}
-
-      {isGenerating && (
-        <div className="processing-state intelligence-processing">
-          <span className="spinner" />
-          <div>
-            <strong>Running the intelligence workflow</strong>
-            <p>Generating structured insights and validating transcript citations.</p>
-          </div>
-        </div>
-      )}
-
-      {error && <p className="error-message">{error}</p>}
-
-      {intelligence && (
-        <div className="intelligence-result">
-          <article className="overview-card">
-            <span>Overview</span>
-            <p>{intelligence.overview.text}</p>
-            <Citations turns={intelligence.overview.turn_sequences} />
-          </article>
-          <div className="insight-grid">
-            <ClaimSection title="Key points" items={intelligence.key_points} />
-            <ClaimSection title="Decisions" items={intelligence.decisions} />
-            <ActionSection items={intelligence.action_items} />
-            <ClaimSection title="Risks" items={intelligence.risks} />
-            <ClaimSection title="Open questions" items={intelligence.open_questions} />
-          </div>
-          <button className="regenerate-button" type="button" onClick={onGenerate}>
-            Generate new version
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ClaimSection({ title, items }: { title: string; items: EvidenceClaim[] }) {
-  return (
-    <section className="insight-section">
-      <h3>{title}</h3>
-      {items.length === 0 ? (
-        <p className="no-insights">Nothing supported by the transcript.</p>
-      ) : (
-        <ul>
-          {items.map((item, index) => (
-            <li key={`${title}-${index}`}>
-              <p>{item.text}</p>
-              <Citations turns={item.turn_sequences} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function ActionSection({ items }: { items: ActionItem[] }) {
-  return (
-    <section className="insight-section">
-      <h3>Action items</h3>
-      {items.length === 0 ? (
-        <p className="no-insights">No action items found.</p>
-      ) : (
-        <ul>
-          {items.map((item, index) => (
-            <li key={`action-${index}`}>
-              <p>{item.text}</p>
-              {(item.owner || item.due_date) && (
-                <small>{[item.owner, item.due_date].filter(Boolean).join(" - ")}</small>
-              )}
-              <Citations turns={item.turn_sequences} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function Citations({ turns }: { turns: number[] }) {
-  return (
-    <div className="citations">
-      {turns.map((turn) => (
-        <button
-          type="button"
-          key={turn}
-          onClick={() =>
-            document.getElementById(`turn-${turn}`)?.scrollIntoView({ behavior: "smooth" })
-          }
-        >
-          Turn {turn}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 type SpeakerEditorProps = {
   transcriptionId: string;
   speakerId: string;
@@ -459,12 +274,14 @@ function SpeakerEditor({
 }: SpeakerEditorProps) {
   const [name, setName] = useState(initialName);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasFailed, setHasFailed] = useState(false);
 
   async function saveName() {
     const displayName = name.trim();
     if (!displayName) return;
 
     setIsSaving(true);
+    setHasFailed(false);
     try {
       const response = await fetch(
         `${apiUrl}/api/v1/transcriptions/${transcriptionId}/speakers/${speakerId}`,
@@ -476,6 +293,8 @@ function SpeakerEditor({
       );
       if (!response.ok) throw new Error("Could not rename speaker.");
       onSaved((await response.json()) as Transcription);
+    } catch {
+      setHasFailed(true);
     } finally {
       setIsSaving(false);
     }
@@ -491,8 +310,8 @@ function SpeakerEditor({
         maxLength={80}
         onChange={(event) => setName(event.target.value)}
       />
-      <button type="button" disabled={!name.trim() || isSaving} onClick={saveName}>
-        {isSaving ? "Saving" : "Save"}
+      <button type="button" disabled={!name.trim() || isSaving} onClick={() => void saveName()}>
+        {isSaving ? "Saving" : hasFailed ? "Retry" : "Save"}
       </button>
     </div>
   );
