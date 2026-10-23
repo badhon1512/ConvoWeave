@@ -137,7 +137,7 @@ class IntelligenceArtifact(Base):
     __tablename__ = "intelligence_artifacts"
     __table_args__ = (
         UniqueConstraint(
-            "conversation_id", "kind", "version", name="uq_intelligence_version"
+            "conversation_id", "kind", name="uq_intelligence_conversation_kind"
         ),
     )
 

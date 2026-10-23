@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -206,20 +207,18 @@ async def save_intelligence(
     model_id: str,
     prompt_version: str,
 ) -> IntelligenceResponse:
+    existing = await get_latest_intelligence(session, conversation_id)
+    if existing is not None:
+        return existing
+
     conversation = await session.get(Conversation, conversation_id)
     if conversation is None:
         raise ValueError("Conversation not found.")
 
-    result = await session.execute(
-        select(func.coalesce(func.max(IntelligenceArtifact.version), 0)).where(
-            IntelligenceArtifact.conversation_id == conversation_id,
-            IntelligenceArtifact.kind == "summary",
-        )
-    )
     artifact = IntelligenceArtifact(
         conversation=conversation,
         kind="summary",
-        version=result.scalar_one() + 1,
+        version=1,
         status="citation_validated",
         content=draft.model_dump(),
         model_id=model_id,
@@ -228,6 +227,12 @@ async def save_intelligence(
     session.add(artifact)
     try:
         await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        existing = await get_latest_intelligence(session, conversation_id)
+        if existing is None:
+            raise
+        return existing
     except Exception:
         await session.rollback()
         raise

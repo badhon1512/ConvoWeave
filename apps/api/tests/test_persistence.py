@@ -118,9 +118,25 @@ async def _persistence_scenario() -> None:
             prompt_version="summary_v1",
         )
         loaded_intelligence = await get_latest_intelligence(session, conversation.id)
+        duplicate = await save_intelligence(
+            session,
+            conversation.id,
+            IntelligenceDraft(
+                overview=EvidenceClaim(text="Different output.", turn_sequences=[1]),
+                key_points=[],
+                decisions=[],
+                action_items=[],
+                risks=[],
+                open_questions=[],
+            ),
+            model_id="test-model",
+            prompt_version="summary_v1",
+        )
 
         assert intelligence.version == 1
         assert loaded_intelligence is not None
         assert loaded_intelligence.overview.turn_sequences == [1]
+        assert duplicate.id == intelligence.id
+        assert duplicate.overview.text == "A greeting was exchanged."
 
     await engine.dispose()

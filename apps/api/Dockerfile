@@ -10,10 +10,12 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
 
 COPY app ./app
 COPY alembic ./alembic
-COPY alembic.ini ./
+COPY alembic.ini pytest.ini ./
 COPY tests ./tests
 
-RUN useradd --create-home appuser && chown -R appuser:appuser /app
+RUN useradd --create-home appuser \
+    && mkdir -p /data/media \
+    && chown -R appuser:appuser /app /data/media
 USER appuser
 
 EXPOSE 8000

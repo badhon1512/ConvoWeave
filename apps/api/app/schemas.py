@@ -85,3 +85,13 @@ class IntelligenceResponse(IntelligenceDraft):
     model_id: str
     prompt_version: str
     created_at: str
+
+
+class QuestionRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=500)
+
+
+class GroundedAnswer(BaseModel):
+    answer: str = Field(min_length=1)
+    supported: bool
+    turn_sequences: list[int]

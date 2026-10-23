@@ -12,6 +12,10 @@ def _settings_without_elevenlabs() -> Settings:
     return Settings(elevenlabs_api_key="")
 
 
+def _settings_without_openai() -> Settings:
+    return Settings(openai_api_key="")
+
+
 async def _unused_session():
     yield None
 
@@ -50,11 +54,26 @@ def test_realtime_token_requires_configuration() -> None:
 
 
 def test_intelligence_requires_configuration() -> None:
-    app.dependency_overrides[get_settings] = _settings_without_elevenlabs
+    app.dependency_overrides[get_settings] = _settings_without_openai
     app.dependency_overrides[get_session] = _unused_session
     try:
         response = client.post(
             "/api/v1/conversations/00000000-0000-0000-0000-000000000001/intelligence"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "OpenAI is not configured."}
+
+
+def test_question_requires_configuration() -> None:
+    app.dependency_overrides[get_settings] = _settings_without_openai
+    app.dependency_overrides[get_session] = _unused_session
+    try:
+        response = client.post(
+            "/api/v1/conversations/00000000-0000-0000-0000-000000000001/questions",
+            json={"question": "What was decided?"},
         )
     finally:
         app.dependency_overrides.clear()

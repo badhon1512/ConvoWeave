@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.schemas import (
     ConversationSummary,
+    GroundedAnswer,
     HealthResponse,
     IntelligenceResponse,
+    QuestionRequest,
     RealtimeTokenResponse,
     SpeakerUpdate,
     TranscriptionResponse,
@@ -37,7 +39,9 @@ from app.services.elevenlabs import ElevenLabsError, ElevenLabsTranscriber
 from app.services.intelligence import (
     PROMPT_VERSION,
     IntelligenceError,
+    OpenAIAnswerGenerator,
     OpenAISummaryGenerator,
+    QuestionWorkflow,
     SummaryWorkflow,
 )
 from app.services.transcript import build_transcript
@@ -88,7 +92,6 @@ async def create_realtime_token(
 @app.post(
     "/api/v1/conversations/{conversation_id}/intelligence",
     response_model=IntelligenceResponse,
-    status_code=status.HTTP_201_CREATED,
 )
 async def create_intelligence(
     conversation_id: UUID,
@@ -101,6 +104,10 @@ async def create_intelligence(
             detail="OpenAI is not configured.",
         )
 
+    existing = await get_latest_intelligence(session, conversation_id)
+    if existing is not None:
+        return existing
+
     transcription = await get_latest_conversation_transcription(
         session, conversation_id
     )
@@ -108,6 +115,11 @@ async def create_intelligence(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation transcript not found.",
+        )
+    if not transcription.turns:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The conversation has no speech to analyze.",
         )
 
     workflow = SummaryWorkflow(
@@ -149,6 +161,54 @@ async def read_intelligence(
             detail="Conversation intelligence not found.",
         )
     return intelligence
+
+
+@app.post(
+    "/api/v1/conversations/{conversation_id}/questions",
+    response_model=GroundedAnswer,
+)
+async def answer_conversation_question(
+    conversation_id: UUID,
+    request: QuestionRequest,
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> GroundedAnswer:
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OpenAI is not configured.",
+        )
+
+    transcription = await get_latest_conversation_transcription(
+        session, conversation_id
+    )
+    if transcription is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation transcript not found.",
+        )
+    if not transcription.turns:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The conversation has no speech to answer from.",
+        )
+
+    workflow = QuestionWorkflow(
+        OpenAIAnswerGenerator(
+            api_key=settings.openai_api_key,
+            model_id=settings.openai_model_id,
+            timeout_seconds=settings.request_timeout_seconds,
+        )
+    )
+    try:
+        return await to_thread.run_sync(
+            lambda: workflow.run(request.question, transcription.turns)
+        )
+    except IntelligenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
 
 
 @app.post(

@@ -4,9 +4,14 @@ from app.schemas import (
     ActionItem,
     ConversationTurn,
     EvidenceClaim,
+    GroundedAnswer,
     IntelligenceDraft,
 )
-from app.services.intelligence import IntelligenceError, SummaryWorkflow
+from app.services.intelligence import (
+    IntelligenceError,
+    QuestionWorkflow,
+    SummaryWorkflow,
+)
 
 
 def test_summary_workflow_accepts_grounded_output() -> None:
@@ -22,6 +27,34 @@ def test_summary_workflow_rejects_unknown_turns() -> None:
 
     with pytest.raises(IntelligenceError, match="unknown turns"):
         workflow.run([_turn()])
+
+
+def test_question_workflow_accepts_grounded_answer() -> None:
+    answer = GroundedAnswer(
+        answer="The team plans to ship on Friday.",
+        supported=True,
+        turn_sequences=[1],
+    )
+
+    result = QuestionWorkflow(lambda question, turns: answer).run(
+        "When will the team ship?", [_turn()]
+    )
+
+    assert result.supported is True
+    assert result.turn_sequences == [1]
+
+
+def test_question_workflow_rejects_unsupported_citations() -> None:
+    workflow = QuestionWorkflow(
+        lambda question, turns: GroundedAnswer(
+            answer="The conversation does not say.",
+            supported=False,
+            turn_sequences=[1],
+        )
+    )
+
+    with pytest.raises(IntelligenceError, match="unsupported answer includes citations"):
+        workflow.run("What is the budget?", [_turn()])
 
 
 def _turn() -> ConversationTurn:
